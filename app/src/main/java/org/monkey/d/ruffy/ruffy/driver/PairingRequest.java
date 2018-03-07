@@ -14,58 +14,76 @@ class PairingRequest extends BroadcastReceiver {
     private final BTHandler handler;
 
     public PairingRequest(final Activity activity, final BTHandler handler)
-        {
-            super();
-            this.activity = activity;
-            this.handler = handler;
-        }
+    {
+        super();
+        this.activity = activity;
+        this.handler = handler;
+    }
 
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            if (Objects.equals(intent.getAction(), "android.bluetooth.device.action.PAIRING_REQUEST")) {
-                try {
-                    final BluetoothDevice device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
+    @Override
+    public void onReceive(Context context, Intent intent) {
+        if (intent.getAction().equals("android.bluetooth.device.action.PAIRING_REQUEST")) {
+            try {
+                final BluetoothDevice device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
 
-                    activity.runOnUiThread(new Runnable() {
-                        @Override
-                        public void run() {
-                            try
-                            {
-                                byte[] pinBytes;
-                                pinBytes = ("}gZ='GD?gj2r|B}>").getBytes("UTF-8");
+                activity.runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        try
+                        {
+                            byte[] pinBytes;
+                            pinBytes = ("}gZ='GD?gj2r|B}>").getBytes("UTF-8");
 
-                                handler.log( "Try to set the PIN");
-                                Method m = device.getClass().getMethod("setPin", byte[].class);
-                                m.invoke(device, pinBytes);
-                                handler.log("Success to add the PIN.");
+                            handler.log( "Try to set the PIN");
+                            device.setPin(pinBytes);
+                            // Method m = device.getClass().getMethod("setPin", byte[].class);
+                            // m.invoke(device, pinBytes);
+                            handler.log("Success to add the PIN.");
 
+                            int loop=3;
+                            boolean bonded=false;
+                            while (loop>0 && !bonded) {
                                 try {
-                                    m = device.getClass().getMethod("createBond");
-                                    m.invoke(device);
-                                    handler.log("Success to start bond.");
+                                    //m = device.getClass().getMethod("createBond");
+                                    //m.invoke(device);
+                                    device.createBond();
+                                    bonded=true;
                                 } catch (Exception e) {
-                                    handler.fail("Failure to start bond: " + e.getMessage() );
+                                    handler.log("No Success to start bond.");
                                     e.printStackTrace();
+                                    Thread.sleep(100);
+                                    loop--;
                                 }
+                                loop=0;
+                            }
+
+                            loop=3;
+                            Boolean Pairconfirm=false;
+                            while (loop>3 && !Pairconfirm) {
                                 try {
-                                    // java.lang.SecurityException: Need BLUETOOTH PRIVILEGED permission: Neither user 10094 nor current process has android.permission.BLUETOOTH_PRIVILEGED.
-                                    // above perm is only granted to system apps, not third party apps ...
-                                    device.getClass().getMethod("setPairingConfirmation", boolean.class).invoke(device, true);
+                                    device.setPairingConfirmation(true);
+                                    Pairconfirm=true;
+                                    // device.getClass().getMethod("setPairingConfirmation", boolean.class).invoke(device, true);
                                     handler.log( "Success to setPairingConfirmation.");
                                 } catch (Exception e) {
-                                    handler.fail( "Failure running setPairingConfirmation: " + e.getMessage());
+                                    handler.log( "No Success to setPairingConfirmation.");
                                     e.printStackTrace();
+                                    Thread.sleep(100);
+                                    loop--;
                                 }
-                            }catch(Exception e)
-                            {
-                                e.printStackTrace();
-                            }
-                        }
-                    });
+                                loop=0;
 
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
+                            }
+                        }catch(Exception e)
+                        {
+                            e.printStackTrace();
+                        }
+                    }
+                });
+
+            } catch (Exception e) {
+                e.printStackTrace();
             }
         }
     }
+}

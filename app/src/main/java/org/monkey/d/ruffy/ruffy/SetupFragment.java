@@ -4,11 +4,18 @@ import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.pm.ActivityInfo;
 import android.os.Bundle;
 import android.support.v4.app.Fragment;
 import android.support.v7.app.AlertDialog;
+import android.text.Editable;
+import android.text.InputFilter;
 import android.text.InputType;
+import android.text.TextWatcher;
 import android.text.method.ScrollingMovementMethod;
+import android.util.DisplayMetrics;
+import android.util.Log;
+import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -21,6 +28,7 @@ import org.monkey.d.ruffy.ruffy.driver.BTConnection;
 import org.monkey.d.ruffy.ruffy.driver.BTHandler;
 import org.monkey.d.ruffy.ruffy.driver.Frame;
 import org.monkey.d.ruffy.ruffy.driver.Packet;
+import org.monkey.d.ruffy.ruffy.driver.PairData;
 import org.monkey.d.ruffy.ruffy.driver.Protocol;
 import org.monkey.d.ruffy.ruffy.driver.Twofish_Algorithm;
 import org.monkey.d.ruffy.ruffy.driver.Utils;
@@ -41,6 +49,7 @@ public class SetupFragment extends Fragment implements View.OnClickListener {
     private BluetoothDevice pairingDevice;
     private byte[] pin;
     final byte[] pairingKey = {16,9,2,0,-16};
+    private PairData Pdata = new PairData();
 
     public SetupFragment() {
 
@@ -177,7 +186,7 @@ public class SetupFragment extends Fragment implements View.OnClickListener {
         switch (c) {
             case 0x11://key response?
                 try {
-                    Object tf = Twofish_Algorithm.makeKey(pin);
+                    Object tf = Twofish_Algorithm.makeKey(Pdata.getPin());
                     btConn.getPumpData().setAndSaveAddress((byte) ((addresses << 4) & 0xF0));        //Get the address and reverse it since source and destination are reversed from the RX packet
 
                     byte[] key_pd = new byte[16];                            //Get the bytes for the keys
@@ -307,31 +316,72 @@ public class SetupFragment extends Fragment implements View.OnClickListener {
                     getActivity().runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
-                            final EditText pinIn = new EditText(getContext());
+                            Pdata.setPinokay(false);
+                            getActivity().setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LOCKED);
+                            final EditText pinIn = new EditText(getActivity());
+                            pinIn.setGravity(Gravity.CENTER);
                             pinIn.setInputType(InputType.TYPE_CLASS_NUMBER);
-                            pinIn.setHint("XXX XXX XXXX");
-                            new AlertDialog.Builder(getContext())
+                            // pinIn.setHint("XXX XXX XXXX");
+                            final AlertDialog AD = new AlertDialog.Builder(getActivity(),R.style.CustomAlertDialog)
                                     .setTitle("Enter Pin")
                                     .setMessage("Read the Pin-Code from pump and enter it")
                                     .setView(pinIn)
-                                    .setPositiveButton("ENTER", new DialogInterface.OnClickListener() {
-                                        public void onClick(DialogInterface dialog, int whichButton) {
-                                            String pin = pinIn.getText().toString();
-                                            appendLog("got the pin: " + pin);
-                                            SetupFragment.this.pin = Utils.generateKey(pin);
-                                            step = 2;
-                                            //sending key available:
-                                            appendLog(" doing A_KEY_AVA");
-                                            byte[] key = {16, 15, 2, 0, -16};
-                                            btConn.writeCommand(key);
+                                    .setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
+                                                public void onClick(DialogInterface dialog, int whichButton) {
+                                                    Log.v("Enter Pin Screen", "cancel");
+                                                }
+                                            }
+                                    )
+                                    .setPositiveButton("Enter", new DialogInterface.OnClickListener() {
+                                                public void onClick(DialogInterface dialog, int whichButton) {
+                                                    String pin = pinIn.getText().toString();
+                                                    Log.v("testScreen", "Pin->" + pin + " ->" + pin.length() + " Zeichen");
+                                                    appendLog("got the pin: " + pin);
+                                                    getActivity().setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
 
-                                        }
-                                    })
-                                    .show();
+                                                    Pdata.setPinokay(true);
+
+                                                    Pdata.setPin(Utils.generateKey(pin));
+                                                    step = 2;
+                                                    //sending key available:
+                                                    appendLog(" doing A_KEY_AVA");
+                                                    byte[] key = {16, 15, 2, 0, -16};
+                                                    btConn.writeCommand(key);
+                                                }
+                                            }
+                                    ).show();
+
+
+                            DisplayMetrics displayMetrics = new DisplayMetrics();
+                            getActivity().getWindowManager().getDefaultDisplay().getMetrics(displayMetrics);
+                            int layout_width = (int) (displayMetrics.widthPixels*0.8);
+                            int layout_height = (int) (displayMetrics.heightPixels *0.42);
+                            AD.getWindow().setLayout(layout_width , layout_height);
+                            pinIn.setFilters(new InputFilter[]{new InputFilter.LengthFilter(10)});
+                            pinIn.setTextSize(30);
+                            AD.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(false);
+                            pinIn.addTextChangedListener(new TextWatcher() {
+                                @Override
+                                public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+
+                                @Override
+                                public void onTextChanged(CharSequence s, int start, int before, int count) {}
+
+                                @Override
+                                public void afterTextChanged(Editable editable) {
+                                    String pin = pinIn.getText().toString();
+                                    if (pin.length() == 10) {
+                                        AD.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(true);
+                                    } else {
+                                        AD.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(false);
+                                    }
+                                }
+
+                            });
+
                         }
                     });
                 }
-
             }
             break;
             default: //we indicated that we have a key, now lets handle the handle to the handle with an handler
