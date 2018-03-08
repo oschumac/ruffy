@@ -65,16 +65,20 @@ public class Ruffy extends Service {
                 return 0;
             }
             step= 0;
+
             if(Ruffy.this.rtHandler==null)
             {
                 throw new IllegalStateException("XXX");
 
 //                return -2;//FIXME make errors
             }
+
             if(!isConnected()) {
+                Log.v("Ruffy.java", "doRTConnect() Start connect");
                 if (pumpData == null) {
                     pumpData = PumpData.loadPump(Ruffy.this, rtHandler);
                 }
+
                 if (pumpData != null) {
                     inShutDown=false;
                     btConn = new BTConnection(rtBTHandler);
@@ -224,6 +228,9 @@ public class Ruffy extends Service {
         // so it won't trigger during disconnect
         SystemClock.sleep(500 + 250);
         Application.sendAppCommand(Application.Command.DEACTIVATE_ALL,btConn);
+        // TODO btcon sauber beenden
+        btConn.disconnect();
+        btConn=null;
     }
 
     private void startRT() {

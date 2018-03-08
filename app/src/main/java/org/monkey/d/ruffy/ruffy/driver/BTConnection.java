@@ -105,7 +105,7 @@ public class BTConnection {
 
         if(state!=0)
         {
-            handler.log("in connect!");
+            handler.log("in connect!" + deviceAddress);
             return;
         }
         state=1;
@@ -123,6 +123,7 @@ public class BTConnection {
         } catch (IOException e) {
             handler.fail("socket create() failed: "+e.getMessage());
         }
+
         if(tmp != null) {
             stopDiscoverable();
             activateConnection(tmp);
@@ -146,55 +147,77 @@ public class BTConnection {
         }
     }
 
+
     private void startReadThread() {
         new Thread() {
             @Override
             public void run() {
-                try {
-                    currentConnection.connect();//This method will block until a connection is made or the connection fails. If this method returns without an exception then this socket is now connected.
-                    currentInput = currentConnection.getInputStream();
-                    currentOutput = currentConnection.getOutputStream();
-                } catch (IOException e) {
-                    //e.printStackTrace();
-                    handler.fail("no connection possible: " + e.getMessage());
-
-
-                    //??????????
-                    //state=1;
-                    //return;
-                }
-                try {
-                    pumpData.getActivity().unregisterReceiver(connectReceiver);
-                }catch(Exception e){/*ignore*/}
-                try {
-                    pumpData.getActivity().unregisterReceiver(pairingReciever);
-                }catch(Exception e){/*ignore*/}
-                state=0;
-
-                //here check if really connected!
-                //this will start thread to write
-                handler.deviceConnected();//in ruffy.java
-
-
-                try {
-                    Thread.sleep(100);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-
-                byte[] buffer = new byte[512];
-                while (true) {
+                int retry = 10;
+                while (currentConnection.isConnected()==false && retry>0) {
                     try {
-                        int bytes = currentInput.read(buffer);
-                        handler.log("read "+bytes+": "+ Utils.byteArrayToHexString(buffer,bytes));
-                        handler.handleRawData(buffer,bytes);
-                    } catch (Exception e) {
-                        //e.printStackTrace();
-                        //do not fail here as we maybe just closed the socket..
-                        handler.log("got error in read");
-                        return;
+                        Log.v("BTConnection "," startReadThread() currentConnection.connect() try->"+retry);
+                        currentConnection.connect();//This method will block until a connection is made or the connection fails. If this method returns without an exception then this socket is now connected.
+                        Log.v("BTConnection "," startReadThread() currentConnection.connect() successfull");
+                        currentInput = currentConnection.getInputStream();
+                        currentOutput = currentConnection.getOutputStream();
+                    } catch (IOException e) {
+
+                        try {
+                            sleep(500);
+                        } catch (InterruptedException e1) {}
+
+
+
+                        e.printStackTrace();
+                        retry--;
+                        Log.e("BTConnection "," startReadThread() no connection possible retry ->"+retry);
                     }
                 }
+
+
+                if (currentConnection.isConnected()==true) {
+
+                    try {
+                        pumpData.getActivity().unregisterReceiver(connectReceiver);
+                    }catch(Exception e){/*ignore*/}
+                    try {
+                        pumpData.getActivity().unregisterReceiver(pairingReciever);
+                    }catch(Exception e){/*ignore*/}
+                    state=0;
+
+                    //here check if really connected!
+                    //this will start thread to write
+                    handler.deviceConnected();//in ruffy.java
+
+
+                    try {
+                        Thread.sleep(100);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+
+                    byte[] buffer = new byte[512];
+                    Log.v("BTConnection"," while read ");
+                    while (true) {
+                        try {
+
+                            int bytes = currentInput.read(buffer);
+                            // Log.v("BTConnection"," read "+bytes+": "+Utils.byteArrayToHexString(buffer,bytes));
+                            handler.handleRawData(buffer,bytes);
+                        } catch (Exception e) {
+                            //e.printStackTrace();
+                            //do not fail here as we maybe just closed the socket..
+                            Log.e("BTConnection"," got error in read"+e);
+                            return;
+                        }
+                    }
+
+
+
+
+                }
+
+
             }
         }.start();
     }
