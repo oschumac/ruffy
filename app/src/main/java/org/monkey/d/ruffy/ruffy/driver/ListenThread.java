@@ -2,6 +2,7 @@ package org.monkey.d.ruffy.ruffy.driver;
 
 import android.bluetooth.BluetoothServerSocket;
 import android.bluetooth.BluetoothSocket;
+import android.util.Log;
 
 import java.io.IOException;
 
@@ -11,26 +12,31 @@ import java.io.IOException;
 
 class ListenThread implements Runnable {
     private final BluetoothServerSocket srvSock;
+    private PairData pData = new PairData();
 
     public ListenThread(BluetoothServerSocket srvSock) {
         this.srvSock = srvSock;
     }
     public void run() {
+        Log.d("ListenThread","ListenThread started");
         BluetoothSocket socket = null;
+        while (pData.BTVisible == true) {
+            try {
+                if (socket == null) {
+                    Log.d("ListenThread", "ListenThread accecpt");
+                    socket = srvSock.accept();
 
-        try {
-            if (socket != null) {
-                socket = srvSock.accept();
-            }
-            if (socket != null) {
-                socket.close();
-                socket=null;
+                }
+                if (socket != null) {
+                    socket.close();
+                    socket = null;
+                }
+            } catch (Exception e) {
+
             }
         }
-        catch(Exception e)
-        {
+        Log.d("ListenThread","ListenThread stopped");
 
-        }
     }
     public void halt()
     {

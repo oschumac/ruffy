@@ -18,6 +18,8 @@ import java.nio.ByteBuffer;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
+import static java.lang.Thread.sleep;
+
 /**
  * Created by fishermen21 on 25.05.17.
  */
@@ -92,6 +94,7 @@ public class Ruffy extends Service {
 
         public void doRTDisconnect()
         {
+            Log.v("Ruffy", "doRTDisconnect()");
             step = 200;
             stopRT();
         }
@@ -156,6 +159,8 @@ public class Ruffy extends Service {
 
     @Override
     public void onDestroy() {
+        Log.v("Ruffy", "onDestroy()");
+
         super.onDestroy();
     }
 
@@ -173,24 +178,31 @@ public class Ruffy extends Service {
 
         @Override
         public void log(String s) {
+            Log.v("RuffyService",s);
             Ruffy.this.log(s);
             if(s.equals("got error in read") && step < 200 && !inShutDown)
             {
                 synRun=false;
                 btConn.connect(pumpData,4);
             }
-            Log.v("RuffyService",s);
         }
 
         @Override
         public void fail(String s) {
+            Log.v("RuffyService",s);
             log("failed: "+s);
             synRun=false;
-            if(step < 200)
-                btConn.connect(pumpData,4);
-            else
-                Ruffy.this.fail(s);
+            if(step < 200) {
+                try {
+                    sleep(200);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
 
+                btConn.connect(pumpData,4);
+            } else {
+                Ruffy.this.fail(s);
+            }
         }
 
         @Override
@@ -218,6 +230,8 @@ public class Ruffy extends Service {
 
     private void stopRT()
     {
+        Log.v("Ruffy", "stopRT()");
+
         step=200;
         rtModeRunning = false;
         // wait for the keep alive thread to detect rtModeRunning has become false
@@ -302,7 +316,7 @@ public class Ruffy extends Service {
                         }
                     }
                     try{
-                        Thread.sleep(500);}catch(Exception e){/*ignore*/}
+                        sleep(500);}catch(Exception e){/*ignore*/}
                 }
                 try {
                     rtHandler.rtStopped();
@@ -321,7 +335,7 @@ public class Ruffy extends Service {
             {
                 Protocol.sendSyn(btConn);
                 try {
-                    Thread.sleep(500);
+                    sleep(500);
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
@@ -352,6 +366,7 @@ public class Ruffy extends Service {
 
         @Override
         public void rtModeDeactivated() {
+            Log.v("Ruffy", "rtModeDeactivated()");
             rtSequence =0;
 
             if(rtHandler!=null)
@@ -361,6 +376,9 @@ public class Ruffy extends Service {
                     Application.sendAppDisconnect(btConn);
                     btConn.disconnect();
                 }
+
+
+            Log.v("Ruffy", "rtModeDeactivated() end");
         }
 
         @Override
@@ -369,6 +387,7 @@ public class Ruffy extends Service {
 
         @Override
         public void modeDeactivated() {
+            Log.v("Ruffy", "modeDeactivated()");
             rtModeRunning = false;
             rtSequence =0;
             if(rtHandler!=null)
@@ -378,6 +397,10 @@ public class Ruffy extends Service {
                 Application.sendAppDisconnect(btConn);
                 btConn.disconnect();
             }
+            Log.v("Ruffy", "modeDeactivated() end");
+            //Todo ServiceStop
+            stopSelf ();
+
         }
 
         @Override

@@ -12,6 +12,7 @@ import java.util.Objects;
 class PairingRequest extends BroadcastReceiver {
     private final Activity activity;
     private final BTHandler handler;
+    private PairData pData = new PairData();
 
     public PairingRequest(final Activity activity, final BTHandler handler)
     {
@@ -23,6 +24,8 @@ class PairingRequest extends BroadcastReceiver {
     @Override
     public void onReceive(Context context, Intent intent) {
         if (intent.getAction().equals("android.bluetooth.device.action.PAIRING_REQUEST")) {
+            handler.log("PairingRequest -> Got a Pairing request");
+
             try {
                 final BluetoothDevice device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
 
@@ -34,11 +37,11 @@ class PairingRequest extends BroadcastReceiver {
                             byte[] pinBytes;
                             pinBytes = ("}gZ='GD?gj2r|B}>").getBytes("UTF-8");
 
-                            handler.log( "Try to set the PIN");
+                            handler.log("PairingRequest -> Try to set the PIN");
                             device.setPin(pinBytes);
                             // Method m = device.getClass().getMethod("setPin", byte[].class);
                             // m.invoke(device, pinBytes);
-                            handler.log("Success to add the PIN.");
+                            handler.log("PairingRequest -> Success to add the PIN.");
 
                             int loop=3;
                             boolean bonded=false;
@@ -49,7 +52,7 @@ class PairingRequest extends BroadcastReceiver {
                                     device.createBond();
                                     bonded=true;
                                 } catch (Exception e) {
-                                    handler.log("No Success to start bond.");
+                                    handler.log("PairingRequest -> No Success to start bond.");
                                     e.printStackTrace();
                                     Thread.sleep(100);
                                     loop--;
@@ -64,9 +67,9 @@ class PairingRequest extends BroadcastReceiver {
                                     device.setPairingConfirmation(true);
                                     Pairconfirm=true;
                                     // device.getClass().getMethod("setPairingConfirmation", boolean.class).invoke(device, true);
-                                    handler.log( "Success to setPairingConfirmation.");
+                                    handler.log( "PairingRequest -> Success to setPairingConfirmation.");
                                 } catch (Exception e) {
-                                    handler.log( "No Success to setPairingConfirmation.");
+                                    handler.log( "PairingRequest -> No Success to setPairingConfirmation.");
                                     e.printStackTrace();
                                     Thread.sleep(100);
                                     loop--;
@@ -74,6 +77,8 @@ class PairingRequest extends BroadcastReceiver {
                                 loop=0;
 
                             }
+                            pData.BTPaired = true;
+
                         }catch(Exception e)
                         {
                             e.printStackTrace();

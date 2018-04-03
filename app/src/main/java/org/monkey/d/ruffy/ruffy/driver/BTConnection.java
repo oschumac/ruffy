@@ -18,6 +18,8 @@ import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
+import static java.lang.Thread.sleep;
+
 /**
  * Created by SandraK82 on 15.05.17.
  */
@@ -26,7 +28,7 @@ public class BTConnection {
     private final BTHandler handler;
     private BluetoothAdapter bluetoothAdapter;
     private ListenThread listen;
-
+    public boolean shouldbevisible;
     private BluetoothSocket currentConnection;
 
     public int seqNo;
@@ -35,7 +37,9 @@ public class BTConnection {
     private PairingRequest pairingReciever;
     private ConnectReceiver connectReceiver;
 
+    private boolean connect=false;
     private PumpData pumpData;
+    private PairData pData = new PairData();
 
     public BTConnection(final BTHandler handler)
     {
@@ -48,6 +52,10 @@ public class BTConnection {
 
     public void makeDiscoverable(Activity activity) {
 
+
+
+        pData.BTVisible=true;
+
         this.pumpData = new PumpData(activity);
 
         IntentFilter filter = new IntentFilter("android.bluetooth.device.action.PAIRING_REQUEST");
@@ -59,6 +67,10 @@ public class BTConnection {
         discoverableIntent.putExtra(BluetoothAdapter.EXTRA_SCAN_MODE, BluetoothAdapter.SCAN_MODE_CONNECTABLE_DISCOVERABLE);
         activity.startActivity(discoverableIntent);
 
+
+
+        handler.log("Bevore BT Sock create");
+
         BluetoothServerSocket srvSock = null;
         try {
             srvSock = bluetoothAdapter.listenUsingInsecureRfcommWithServiceRecord("SerialLink", UUID.fromString("00001101-0000-1000-8000-00805f9b34fb"));
@@ -66,19 +78,36 @@ public class BTConnection {
             handler.fail("socket listen() failed");
             return;
         }
+        handler.log("After BT Sock creation");
 
-        final BluetoothServerSocket lSock = srvSock;
-        listen = new ListenThread(srvSock);
+        if (srvSock!=null) {
+            handler.log("BTConnection create Socket for Serial Link successfull ->" + srvSock.toString());
+        } else {
+            handler.log("BTConnection create Socket for Serial Link NOT successfull ->" + srvSock.toString());
+        }
 
-        filter = new IntentFilter("android.bluetooth.device.action.ACL_CONNECTED");
+
+        IntentFilter filter_ACL_CONNECTED = new IntentFilter("android.bluetooth.device.action.ACL_CONNECTED");
         connectReceiver = new ConnectReceiver(handler);
-        activity.registerReceiver(connectReceiver, filter);
+        activity.registerReceiver(connectReceiver, filter_ACL_CONNECTED);
 
+
+        /*
+        // final BluetoothServerSocket lSock = srvSock;
+        listen = new ListenThread(srvSock);
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool( 1 );
         scheduler.execute(listen);
+        */
+
+
+        startDiscoverthread(activity);
+
     }
 
+
     public void stopDiscoverable() {
+        shouldbevisible=false;
+        pData.BTVisible=false;
         if(listen!=null)
         {
             listen.halt();
@@ -88,6 +117,33 @@ public class BTConnection {
             bluetoothAdapter.cancelDiscovery();
         }
     }
+
+    private void startDiscoverthread(Activity activity) {
+        shouldbevisible=true;
+        new Thread() {
+            @Override
+            public void run() {
+                while (shouldbevisible==true) {
+                    try {
+                        sleep(10000);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                    if(bluetoothAdapter.getScanMode() == BluetoothAdapter.SCAN_MODE_CONNECTABLE_DISCOVERABLE)
+                    {
+                        Log.d("startDiscoverthread" , "Phone ist visible");
+                    } else {
+                        Log.e("startDiscoverthread" , "Phone ist not visible");
+
+                    }
+
+                }
+
+            }
+
+        }.start();
+    }
+
 
     public void connect(BluetoothDevice device) {
         connect(device.getAddress(), 4);
@@ -102,45 +158,79 @@ public class BTConnection {
     private int state = 0;
 
     private void connect(String deviceAddress, int retry) {
-
         if(state!=0)
         {
-            handler.log("in connect!");
+            handler.log("in connect! wrong state="+state);
             return;
         }
         state=1;
+
+        bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
+        if (bluetoothAdapter==null) {
+            handler.fail("in connect -> Can't connect to BT Lib !!");
+            state=0;
+            return;
+        }
+
+        int btretry = 1;
+        while (!bluetoothAdapter.isEnabled() && btretry<=3) {
+            btretry++;
+            if (!bluetoothAdapter.isEnabled()) {
+                handler.log("in connect! Bluetooth ist ausgeschaltet schalte ein");
+                bluetoothAdapter.enable();
+                try {
+                    sleep(2000);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+
+
+        handler.log("in connect! (" + deviceAddress + ") retry -> (" + retry + ")");
+
         BluetoothDevice device = bluetoothAdapter.getRemoteDevice(deviceAddress);
 
+        // TODO Connect läuft hier nicht immer ab mehr bebug infos's einbauen wo es hackt.
         BluetoothSocket tmp = null;
         try {
             try {
-                Thread.sleep(500);
+                sleep(500);
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
 
             tmp = device.createInsecureRfcommSocketToServiceRecord(UUID.fromString("00001101-0000-1000-8000-00805f9b34fb"));
+            handler.log("BTConnection.java create socket successfull");
         } catch (IOException e) {
+            state=0;
             handler.fail("socket create() failed: "+e.getMessage());
         }
+        // TODO hier kommt der code schon nicht mehr hin ?
+
+
         if(tmp != null) {
+            handler.log("BTConnection.java activate connection !=null");
             stopDiscoverable();
             activateConnection(tmp);
         }
         else
         {
-            handler.fail("failed the pump connection( retries left: "+retry+")");
+            handler.log("BTConnection.java activate connection == null");
+            handler.log("failed the pump connection( retries left: "+retry+")");
             try {
-                Thread.sleep(100);
+                sleep(100);
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
             if(retry>0)
             {
+                state=0;
                 connect(deviceAddress,retry-1);
             }
             else
             {
+                state=0;
                 handler.fail("Failed to connect");
             }
         }
@@ -151,13 +241,22 @@ public class BTConnection {
             @Override
             public void run() {
                 try {
-                    currentConnection.connect();//This method will block until a connection is made or the connection fails. If this method returns without an exception then this socket is now connected.
-                    currentInput = currentConnection.getInputStream();
-                    currentOutput = currentConnection.getOutputStream();
+                    if (currentConnection!=null) {
+                        currentConnection.connect();//This method will block until a connection is made or the connection fails. If this method returns without an exception then this socket is now connected.
+                        currentInput = currentConnection.getInputStream();
+                        currentOutput = currentConnection.getOutputStream();
+                        connect = true;
+                        state = 2;
+                    } else {
+                        state = 0;
+                        handler.fail("no connection possible: currentConnection is invalid");
+                        return;
+                    }
                 } catch (IOException e) {
                     //e.printStackTrace();
+                    state = 0;
                     handler.fail("no connection possible: " + e.getMessage());
-
+                    return;
 
                     //??????????
                     //state=1;
@@ -169,7 +268,6 @@ public class BTConnection {
                 try {
                     pumpData.getActivity().unregisterReceiver(pairingReciever);
                 }catch(Exception e){/*ignore*/}
-                state=0;
 
                 //here check if really connected!
                 //this will start thread to write
@@ -177,13 +275,13 @@ public class BTConnection {
 
 
                 try {
-                    Thread.sleep(100);
+                    sleep(100);
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
 
                 byte[] buffer = new byte[512];
-                while (true) {
+                while (connect==true) {
                     try {
                         int bytes = currentInput.read(buffer);
                         handler.log("read "+bytes+": "+ Utils.byteArrayToHexString(buffer,bytes));
@@ -191,10 +289,17 @@ public class BTConnection {
                     } catch (Exception e) {
                         //e.printStackTrace();
                         //do not fail here as we maybe just closed the socket..
-                        handler.log("got error in read");
+
+                        if (connect==true) {
+                            handler.log("got error in read");
+                        } else {
+                            state = 0;
+                        }
+
                         return;
                     }
                 }
+                state=0;
             }
         }.start();
     }
@@ -218,11 +323,16 @@ public class BTConnection {
         for (i = 0; i < key.length; i++) {
             sb.append(String.format("%02X ", key[i]));
         }
-        handler.log("writing command: "+sb.toString());
-        write(ro);
+        if (state>1) {
+            handler.log("writing command: " + sb.toString());
+            write(ro);
+        } else {
+            handler.log("writing command: but no connection established");
+        }
     }
 
     private void activateConnection(BluetoothSocket newConnection){
+
         if(this.currentConnection!=null)
         {
             try {
@@ -237,9 +347,11 @@ public class BTConnection {
             this.currentInput=null;
             this.currentOutput=null;
             this.currentConnection=null;
-            handler.fail("closed current Connection");
+            handler.log("activateConnection() -> closed current Connection");
         }
-        handler.fail("got new Connection: "+newConnection);
+        // TODO: Wieso Handler Fail ?
+        // handler.fail("got new Connection: "+newConnection);
+        handler.log("got new Connection: "+newConnection);
         this.currentConnection = newConnection;
         if(newConnection!=null)
         {
@@ -262,6 +374,8 @@ public class BTConnection {
         }catch(Exception e)
         {
             //e.printStackTrace();
+            state=0;
+            connect=false;
             handler.fail("failed write of "+ro.length+" bytes!");
         }
     }
@@ -272,6 +386,7 @@ public class BTConnection {
     }
 
     public void disconnect() {
+        connect=false;
         try {
             this.currentOutput.close();
         } catch (Exception e) {/*ignore*/}
@@ -286,7 +401,8 @@ public class BTConnection {
         this.currentConnection=null;
         this.pumpData = null;
 
-        handler.log("disconnect() closed current Connection");
+        state=0;
+        handler.log("disconnect() closed current Connection state=0");
     }
 
     public PumpData getPumpData() {

@@ -1,5 +1,7 @@
 package org.monkey.d.ruffy.ruffy.driver;
 
+import android.app.Activity;
+import android.content.SharedPreferences;
 import android.util.Log;
 
 /**
@@ -9,6 +11,10 @@ import android.util.Log;
 public class PairData {
     private static byte[] pin;
     private static Boolean pinokay;
+    private static Boolean paired;
+    public static boolean BTVisible;
+    public static boolean BTPaired;
+    public static boolean ROCHEPAIRED;
 
 public byte[] getPin() {
     Log.v("PairData", "getPin->"+pin);
@@ -28,6 +34,5 @@ public void setPinokay(boolean val) {
     Log.v("PairData", "setPinokay->"+val);
     pinokay = val;
 }
-
 
 }

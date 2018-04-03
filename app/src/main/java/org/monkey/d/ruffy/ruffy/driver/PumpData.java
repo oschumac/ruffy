@@ -19,6 +19,8 @@ public class PumpData {
     private byte[] nonceTx;
     private Context activity;
 
+
+
     public PumpData(Context activity) {
         this.activity = activity;
         this.nonceTx = new byte[13];

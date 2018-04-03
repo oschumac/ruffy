@@ -71,7 +71,9 @@ public class SetupFragment extends Fragment implements View.OnClickListener {
     @Override
     public void onClick(final View view) {
         view.setEnabled(false);
+        Pdata.BTPaired=false;
         connectLog.setText("Starting rfcomm to wait for Pump connection…");
+        appendLog("Starting rfcomm to wait for Pump connection…");
 
         btConn = new BTConnection(new BTHandler() {
             BluetoothDevice device;
@@ -107,15 +109,24 @@ public class SetupFragment extends Fragment implements View.OnClickListener {
 
             @Override
             public void deviceFound(BluetoothDevice device) {
-                if (this.device == null) {
+
+                if (Pdata.BTPaired==true) {
                     this.device = device;
-                    appendLog("found device first time " + device + " waiting for next");
-                } else if (this.device.getAddress().equals(device.getAddress())) {
                     pairingDevice = device;
                     btConn.connect(device);
                 } else {
-                    this.device = device;
-                    appendLog("found device first time " + device + " waiting for next");
+                    if (this.device == null) {
+                        this.device = device;
+                        appendLog("found device first time " + device.getName() + "(" + device + ") waiting for next   (this.device == null)");
+
+                    } else if (this.device.getAddress().equals(device.getAddress())) {
+                        appendLog("pairingDevice,connect (this.device.getAddress().equals(device.getAddress()))");
+                        pairingDevice = device;
+                        btConn.connect(device);
+                    } else {
+                        this.device = device;
+                        appendLog("found device first time " + device.getName() + "(" + device + ") waiting for next  (chould not happen)");
+                    }
                 }
             }
 
@@ -134,7 +145,7 @@ public class SetupFragment extends Fragment implements View.OnClickListener {
     }
 
     private void appendLog(final String message) {
-//        Log.v("RUFFY_LOG", message);
+        Log.v("RUFFY_LOG", message);
         if(getActivity()!=null) {
             getActivity().runOnUiThread(new Runnable() {
                 @Override
